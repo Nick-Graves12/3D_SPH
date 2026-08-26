@@ -13,15 +13,18 @@ void renderScene(
     float particleRadius,
     float restDensity,
     bool showDensityColors,
+    bool showPressureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms,
+    const RenderTexture2D& sceneTarget,
     const RenderTexture2D& fluidTarget,
     const Material& fluidDepthMaterial,
     const RenderTexture2D& blurTarget,
     const Shader& fluidBlurShader,
     int texelDirectionLocation,
-    const Shader& fluidSurfaceShader);
+    const Shader& fluidSurfaceShader,
+    int sceneTextureLocation);
 
 void drawParticles(
     const std::vector<FluidParticle>& particles,
@@ -31,3 +34,5 @@ void drawParticles(
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms);
+
+RenderTexture2D loadFloatRenderTexture(int width, int height);

@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include "raymath.h"
+#include "rlgl.h"
 
 Vector3 toRaylib(const Vec3& value)
 {
@@ -85,15 +86,18 @@ void renderScene(
     float particleRadius,
     float restDensity,
     bool showDensityColors,
+    bool showPressureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms,
+    const RenderTexture2D& sceneTarget,
     const RenderTexture2D& fluidTarget,
     const Material& fluidDepthMaterial,
     const RenderTexture2D& blurTarget,
     const Shader& fluidBlurShader,
     int texelDirectionLocation,
-    const Shader& fluidSurfaceShader)
+    const Shader& fluidSurfaceShader,
+    int sceneTextureLocation)
 {
     BeginTextureMode(fluidTarget);
     ClearBackground(Color{255, 255, 255, 0});
@@ -171,11 +175,7 @@ void renderScene(
 
     EndShaderMode();
     EndTextureMode();
-
-    float horizontalDirection[2]{
-        1.0f / static_cast<float>(fluidTarget.texture.width),
-        0.0f
-    };
+    
     SetShaderValue(
         fluidBlurShader,
         texelDirectionLocation,
@@ -186,13 +186,6 @@ void renderScene(
     ClearBackground(Color{255, 255, 255, 0});
     BeginShaderMode(fluidBlurShader);
 
-    Rectangle depthSource{
-        0.0f,
-        0.0f,
-        static_cast<float>(fluidTarget.texture.width),
-        -static_cast<float>(fluidTarget.texture.height)
-    };
-
     DrawTextureRec(
         fluidTarget.texture,
         depthSource,
@@ -201,11 +194,6 @@ void renderScene(
 
     EndShaderMode();
     EndTextureMode();
-
-    float verticalDirection[2]{
-        0.0f,
-        1.0f / static_cast<float>(blurTarget.texture.height)
-    };
 
     SetShaderValue(
         fluidBlurShader,
@@ -217,13 +205,6 @@ void renderScene(
     ClearBackground(Color{255, 255, 255, 0});
     BeginShaderMode(fluidBlurShader);
 
-    Rectangle blurSource{
-        0.0f,
-        0.0f,
-        static_cast<float>(blurTarget.texture.width),
-        -static_cast<float>(blurTarget.texture.height)
-    };
-
     DrawTextureRec(
         blurTarget.texture,
         blurSource,
@@ -233,12 +214,12 @@ void renderScene(
     EndShaderMode();
     EndTextureMode();
 
-    BeginDrawing();
+    BeginTextureMode(sceneTarget);
     ClearBackground(RAYWHITE);
     BeginMode3D(camera);
 
     DrawBoundingBox(tank, BLACK);
-    
+
     float pipeLength = 0.4f;
     Vec3 backCenter{
         emitter.center.x - pipeLength,
@@ -261,6 +242,24 @@ void renderScene(
             RED);
 
     EndMode3D();
+    EndTextureMode();
+
+    BeginDrawing();
+    ClearBackground(RAYWHITE);
+
+    Rectangle sceneSource{
+        0.0f,
+        0.0f,
+        static_cast<float>(sceneTarget.texture.width),
+        -static_cast<float>(sceneTarget.texture.height)
+    };
+
+    DrawTextureRec(
+        sceneTarget.texture,
+        sceneSource,
+        Vector2{0.0f, 0.0f},
+        WHITE
+    );
 
     Rectangle source{
         0.0f,
@@ -268,6 +267,11 @@ void renderScene(
         static_cast<float>(fluidTarget.texture.width),
         -static_cast<float>(fluidTarget.texture.height)
     };
+
+    SetShaderValueTexture(
+        fluidSurfaceShader,
+        sceneTextureLocation,
+        sceneTarget.texture);
 
     BeginShaderMode(fluidSurfaceShader);
 
@@ -291,7 +295,7 @@ void drawParticles(
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms)
 {
-    const float renderRadius = particleRadius * 1.8f;
+    const float renderRadius = particleRadius * 1.55f;
     particleTransforms.clear();
 
     for (const FluidParticle& particle : particles)
@@ -337,4 +341,44 @@ void drawParticles(
             particleTransforms.data(),
             static_cast<int>(particleTransforms.size()));
     }
+}
+
+RenderTexture2D loadFloatRenderTexture(int width, int height)
+{
+    RenderTexture2D target{};
+    target.id = rlLoadFramebuffer();
+    target.texture.id = rlLoadTexture(
+        nullptr,
+        width,
+        height,
+        RL_PIXELFORMAT_UNCOMPRESSED_R32G32B32A32,
+        1);
+    target.texture.width = width;
+    target.texture.height = height;
+    target.texture.mipmaps = 1;
+    target.texture.format = PIXELFORMAT_UNCOMPRESSED_R32G32B32A32;
+    rlFramebufferAttach(
+        target.id,
+        target.texture.id,
+        RL_ATTACHMENT_COLOR_CHANNEL0,
+        RL_ATTACHMENT_TEXTURE2D,
+        0);
+
+    target.depth.id = rlLoadTextureDepth(width, height, true);
+    target.depth.width = width;
+    target.depth.height = height;
+    target.depth.mipmaps = 1;
+    target.depth.format = 0;
+
+    rlFramebufferAttach(
+        target.id,
+        target.depth.id,
+        RL_ATTACHMENT_DEPTH,
+        RL_ATTACHMENT_RENDERBUFFER,
+        0);
+    if (!rlFramebufferComplete(target.id))
+    {
+        TraceLog(LOG_ERROR, "Float render texture framebuffer is incomplete");
+    }
+    return target;
 }

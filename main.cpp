@@ -59,14 +59,18 @@ int main ()
     float physicsAccumulator = 0.0f;
 
     bool showDensityColors = false;
+    bool showPressureColors = false;
 
     InitWindow(windowWidth, windowHeight, "SPH");
     SetTargetFPS(60);
 
     RenderTexture2D fluidTarget =
-        LoadRenderTexture(windowWidth, windowHeight);
+        loadFloatRenderTexture(windowWidth, windowHeight);
 
     RenderTexture2D blurTarget =
+        loadFloatRenderTexture(windowWidth, windowHeight);
+    
+    RenderTexture2D sceneTarget =
         LoadRenderTexture(windowWidth, windowHeight);
 
     Shader lightingShader = LoadShader(
@@ -144,7 +148,7 @@ int main ()
         fluidDepthShader,
         "maximumDepth");
 
-    float maximumDepth = 30.0f;
+    float maximumDepth = 22.0f;
 
     Material fluidDepthMaterial =
     LoadMaterialDefault();
@@ -189,13 +193,27 @@ int main ()
         1.0f / static_cast<float>(windowHeight)
     };
 
-    float normalStrength = 40.0f;
+    float normalStrength = 25.0f;
 
     SetShaderValue(
         fluidSurfaceShader,
         texelSizeLocation,
         texelSize,
         SHADER_UNIFORM_VEC2);
+    
+    int sceneTextureLocation =
+        GetShaderLocation(fluidSurfaceShader, "sceneTexture");
+
+    int refractionStrengthLocation =
+        GetShaderLocation(fluidSurfaceShader, "refractionStrength");
+    
+    float refractionStrength = 0.02f;
+
+    SetShaderValue(
+        fluidSurfaceShader,
+        refractionStrengthLocation,
+        &refractionStrength,
+        SHADER_UNIFORM_FLOAT);
 
     SetShaderValue(
         fluidSurfaceShader,
@@ -232,12 +250,30 @@ int main ()
         fluidLightDirectionLocation,
         fluidLightDirection,
         SHADER_UNIFORM_VEC3);
+
+    SetTextureFilter(fluidTarget.texture, TEXTURE_FILTER_BILINEAR);
+    SetTextureFilter(blurTarget.texture, TEXTURE_FILTER_BILINEAR);
+    SetTextureFilter(sceneTarget.texture, TEXTURE_FILTER_BILINEAR);  
             
     while (!WindowShouldClose())
     {
         if (IsKeyPressed(KEY_D))
         {
             showDensityColors = !showDensityColors;
+
+            if (showDensityColors)
+            {
+                showPressureColors = false;
+            }
+        }
+        if (IsKeyPressed(KEY_P))
+        {
+            showPressureColors = !showPressureColors;
+
+            if (showPressureColors)
+            {
+                showDensityColors = false;
+            }
         }
         float frameTime = GetFrameTime();
         frameTime = std::min(frameTime, 0.1f);
@@ -278,15 +314,18 @@ int main ()
             config.particleRadius,
             config.restDensity,
             showDensityColors,
+            showPressureColors,
             particleModel,
             instancedParticleMaterial,
             particleTransforms,
+            sceneTarget,
             fluidTarget,
             fluidDepthMaterial,
             blurTarget,
             fluidBlurShader,
             texelDirectionLocation,
-            fluidSurfaceShader);
+            fluidSurfaceShader,
+            sceneTextureLocation);
 
         double renderingMilliseconds =
             (GetTime() - renderingStart) * 1000.0;
@@ -357,6 +396,8 @@ int main ()
     UnloadShader(fluidBlurShader);
 
     UnloadShader(fluidSurfaceShader);
+
+    UnloadRenderTexture(sceneTarget);
 
     CloseWindow();
 
