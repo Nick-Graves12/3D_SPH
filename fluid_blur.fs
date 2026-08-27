@@ -12,18 +12,14 @@ void main()
 {
     vec4 centerSample = texture(texture0, fragTexCoord);
 
-    if (centerSample.a < 0.5)
-    {
-        finalColor = vec4(1.0, 1.0, 1.0, 0.0);
-        return;
-    }
-
     float centerDepth = centerSample.r;
     float weightedDepthSum = 0.0;
     float totalWeight = 0.0;
+    float weightedAlphaSum = 0.0;
+    float totalSpatialWeight = 0.0;
 
-    const int blurRadius = 8;
-    const float spatialSigma = 4.0;
+    const int blurRadius = 4;
+    const float spatialSigma = 3.0;
 
     for (int offset = -blurRadius; offset <= blurRadius; offset++)
     {
@@ -31,26 +27,56 @@ void main()
             fragTexCoord + texelDirection * float(offset);
         vec4 neighborSample =
             texture(texture0, sampleCoordinates);
-        if (neighborSample.a < 0.5)
-        {
-            continue;
-        }
+      
         float spatialWeight = exp(
             -0.5 * float(offset * offset) /
             (spatialSigma * spatialSigma));
 
-        float depthWeight = exp(
-            -abs(neighborSample.r - centerDepth) *
-            depthFalloff);
+        if (abs(offset) <= 3)
+        {
+            weightedAlphaSum += neighborSample.a * spatialWeight;
+            totalSpatialWeight += spatialWeight;
+        }
 
-        float weight = spatialWeight * depthWeight;
+       if (neighborSample.a > 0.001)
+        {
+            float depthWeight = 1.0;
 
-        weightedDepthSum += neighborSample.r * weight;
-        totalWeight += weight;
+            if (centerSample.a > 0.05)
+            {
+                depthWeight = exp(
+                    -abs(neighborSample.r - centerDepth) *
+                    depthFalloff);
+            }
+
+            float weight =
+                spatialWeight *
+                depthWeight *
+                neighborSample.a;
+
+            weightedDepthSum +=
+                neighborSample.r * weight;
+
+            totalWeight += weight;
+        }
+    }
+    if (totalSpatialWeight <= 0.0)
+    {
+        finalColor = vec4(0.0);
+        return;
     }
     float blurredDepth =
-        weightedDepthSum / totalWeight;
+        totalWeight > 0.0
+            ? weightedDepthSum / totalWeight
+            : 0.0;
+
+   float neighborAlpha =
+        weightedAlphaSum / totalSpatialWeight;
+
+    float blurredAlpha =
+        mix(centerSample.a, neighborAlpha, 0.50);
+
 
     finalColor =
-        vec4(vec3(blurredDepth), 1.0);
+        vec4(vec3(blurredDepth), blurredAlpha);
 }

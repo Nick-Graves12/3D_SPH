@@ -24,7 +24,10 @@ void renderScene(
     const Shader& fluidBlurShader,
     int texelDirectionLocation,
     const Shader& fluidSurfaceShader,
-    int sceneTextureLocation);
+    int sceneTextureLocation,
+    const RenderTexture2D& thicknessTarget,
+    const Material& fluidThicknessMaterial,
+    int thicknessTextureLocation);
 
 void drawParticles(
     const std::vector<FluidParticle>& particles,

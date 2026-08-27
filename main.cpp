@@ -69,6 +69,9 @@ int main ()
 
     RenderTexture2D blurTarget =
         loadFloatRenderTexture(windowWidth, windowHeight);
+
+    RenderTexture2D thicknessTarget =
+        loadFloatRenderTexture(windowWidth, windowHeight);
     
     RenderTexture2D sceneTarget =
         LoadRenderTexture(windowWidth, windowHeight);
@@ -134,19 +137,45 @@ int main ()
         .maps[MATERIAL_MAP_DIFFUSE]
         .color = Color{20, 120, 230, 255};
     
-    Shader fluidDepthShader = LoadShader(
+    Shader fluidDepthShader = 
+    LoadShader(
         "fluid_depth_instanced.vs",
         "fluid_depth.fs");
+
+    Shader fluidThicknessShader =
+    LoadShader(
+        "fluid_depth_instanced.vs",
+        "fluid_thickness.fs");
+
+    fluidThicknessShader.locs[SHADER_LOC_MATRIX_MODEL] =
+        GetShaderLocationAttrib(
+            fluidThicknessShader,
+            "instanceTransform");
+
+    fluidThicknessShader.locs[SHADER_LOC_VERTEX_NORMAL] =
+        GetShaderLocationAttrib(
+            fluidThicknessShader,
+            "vertexNormal");
     
     fluidDepthShader.locs[SHADER_LOC_MATRIX_MODEL] =
         GetShaderLocationAttrib(
             fluidDepthShader,
             "instanceTransform");
     
+    fluidDepthShader.locs[SHADER_LOC_VERTEX_NORMAL] =
+        GetShaderLocationAttrib(
+            fluidDepthShader,
+            "vertexNormal");
+    
     int maximumDepthLocation =
     GetShaderLocation(
         fluidDepthShader,
         "maximumDepth");
+
+    int cameraPositionLocation =
+    GetShaderLocation(
+        fluidDepthShader,
+        "cameraPosition");
 
     float maximumDepth = 22.0f;
 
@@ -155,6 +184,12 @@ int main ()
 
     fluidDepthMaterial.shader =
         fluidDepthShader;
+
+    Material fluidThicknessMaterial =
+        LoadMaterialDefault();
+
+    fluidThicknessMaterial.shader =
+        fluidThicknessShader;
 
     SetShaderValue(
         fluidDepthShader,
@@ -171,7 +206,7 @@ int main ()
     int depthFalloffLocation =
         GetShaderLocation(fluidBlurShader, "depthFalloff");
 
-    float depthFalloff = 20.0f;
+    float depthFalloff = 12.0f;
 
     SetShaderValue(
         fluidBlurShader,
@@ -203,6 +238,11 @@ int main ()
     
     int sceneTextureLocation =
         GetShaderLocation(fluidSurfaceShader, "sceneTexture");
+
+    int thicknessTextureLocation =
+        GetShaderLocation(
+            fluidSurfaceShader,
+            "thicknessTexture");
 
     int refractionStrengthLocation =
         GetShaderLocation(fluidSurfaceShader, "refractionStrength");
@@ -282,6 +322,18 @@ int main ()
 
         updateCameraControls(camera, frameTime);
 
+        float cameraPosition[3]{
+            camera.position.x,
+            camera.position.y,
+            camera.position.z
+        };
+
+        SetShaderValue(
+            fluidDepthShader,
+            cameraPositionLocation,
+            cameraPosition,
+            SHADER_UNIFORM_VEC3);
+
         int substepCount = 0;
 
         double physicsStart = GetTime();
@@ -325,7 +377,10 @@ int main ()
             fluidBlurShader,
             texelDirectionLocation,
             fluidSurfaceShader,
-            sceneTextureLocation);
+            sceneTextureLocation,
+            thicknessTarget,
+            fluidThicknessMaterial,
+            thicknessTextureLocation);
 
         double renderingMilliseconds =
             (GetTime() - renderingStart) * 1000.0;
@@ -407,6 +462,13 @@ int main ()
     UnloadRenderTexture(blurTarget);
 
     UnloadShader(fluidBlurShader);
+
+    UnloadRenderTexture(thicknessTarget);
+
+    fluidThicknessMaterial.shader = Shader{};
+    UnloadMaterial(fluidThicknessMaterial);
+
+    UnloadShader(fluidThicknessShader);
 
     UnloadShader(fluidSurfaceShader);
 

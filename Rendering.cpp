@@ -126,7 +126,10 @@ void renderScene(
     const Shader& fluidBlurShader,
     int texelDirectionLocation,
     const Shader& fluidSurfaceShader,
-    int sceneTextureLocation)
+    int sceneTextureLocation,
+    const RenderTexture2D& thicknessTarget,
+    const Material& fluidThicknessMaterial,
+    int thicknessTextureLocation)
 {
     bool showDebugColors =
         showDensityColors || showPressureColors;
@@ -146,6 +149,29 @@ void renderScene(
 
     EndMode3D();
     EndTextureMode();
+
+    BeginTextureMode(thicknessTarget);
+    ClearBackground(Color{0, 0, 0, 0});
+
+    BeginBlendMode(BLEND_ADDITIVE);
+    rlDisableDepthTest();
+    BeginMode3D(camera);
+
+    drawParticles(
+        particles,
+        particleRadius,
+        restDensity,
+        false,
+        false,
+        particleModel,
+        fluidThicknessMaterial,
+        particleTransforms);
+
+    EndMode3D();
+    rlEnableDepthTest();
+    EndBlendMode();
+
+    EndTextureMode();   
 
     float horizontalDirection[2]{
         1.0f / static_cast<float>(fluidTarget.texture.width),
@@ -315,12 +341,17 @@ void renderScene(
         -static_cast<float>(fluidTarget.texture.height)
     };
 
-   if (!showDebugColors)
+    if (!showDebugColors)
     {
         SetShaderValueTexture(
             fluidSurfaceShader,
             sceneTextureLocation,
             sceneTarget.texture);
+
+        SetShaderValueTexture(
+            fluidSurfaceShader,
+            thicknessTextureLocation,
+            thicknessTarget.texture);
 
         BeginShaderMode(fluidSurfaceShader);
 
@@ -332,8 +363,6 @@ void renderScene(
 
         EndShaderMode();
     }
-    
-    EndShaderMode();
 
     EndDrawing();
 }
@@ -348,7 +377,7 @@ void drawParticles(
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms)
 {
-    const float renderRadius = particleRadius * 1.55f;
+    const float renderRadius = particleRadius * 1.75f;
     particleTransforms.clear();
 
     for (const FluidParticle& particle : particles)

@@ -4,6 +4,7 @@ in vec2 fragTexCoord;
 
 uniform sampler2D texture0;
 uniform sampler2D sceneTexture;
+uniform sampler2D thicknessTexture;
 uniform vec2 texelSize;
 uniform vec3 fluidColor;
 uniform vec3 lightDirection;
@@ -17,11 +18,11 @@ void main()
     vec4 centerSample =
         texture(texture0, fragTexCoord);
 
-    if (centerSample.a < 0.5)
-    {
-        finalColor = vec4(0.0);
-        return;
-    }
+    float thickness =
+        texture(thicknessTexture, fragTexCoord).r;
+
+    float thicknessFactor =
+        clamp(thickness * 2.0, 0.0, 1.0);   
 
     float centerDepth = centerSample.r;
 
@@ -76,8 +77,10 @@ void main()
     float diffuse =
         max(dot(surfaceNormal, normalizedLight), 0.0);
 
+
     vec3 viewDirection =
         vec3(0.0, 0.0, 1.0);
+
 
     vec3 halfwayDirection =
         normalize(normalizedLight + viewDirection);
@@ -92,16 +95,65 @@ void main()
     float fresnel =
         pow(1.0 - max(surfaceNormal.z, 0.0), 3.0);
 
+    vec3 darkBlue =
+        vec3(0.01, 0.08, 0.40);
+
+    vec3 brightBlue =
+        vec3(0.00, 0.48, 0.85);
+
+    float colorMix =
+        smoothstep(0.75, 0.98, diffuse);
+
+    float surfaceVariation =
+        clamp(length(vec2(depthDx, depthDy)) * 0.15, 0.0, 1.0);
+
+
+    float depthFactor =
+        clamp(centerDepth * 1.5, 0.0, 1.0);
+
     vec3 shadedColor =
-        fluidColor * (ambient + 0.75 * diffuse);
-        
+        mix(darkBlue, brightBlue, colorMix);
+
+    vec3 deepBlue =
+        vec3(0.005, 0.05, 0.22);
+
+    shadedColor =
+        mix(
+            shadedColor,
+            deepBlue,
+            thicknessFactor * 0.35);
+
+    float absorptionStrength = 1.0;
+
+    float transmission =
+        exp(-absorptionStrength * thickness);
+
+    vec3 absorptionColor =
+        vec3(0.005, 0.12, 0.32);
+
+    shadedColor =
+        mix(
+            absorptionColor,
+            shadedColor,
+            transmission);    
+    
+    shadedColor *=
+        mix(1.0, 0.65, depthFactor);
+
+    shadedColor +=
+        vec3(0.0, 0.18, 0.28) * surfaceVariation;  
+
     shadedColor +=
         vec3(0.85, 0.92, 1.0) * specular * 0.45;
 
     shadedColor +=
         vec3(0.25, 0.45, 0.65) * fresnel;
 
-    float fluidOpacity = 0.65;
+    float surfaceAlpha =
+        smoothstep(0.15, 0.35, centerSample.a);
+
+    float fluidOpacity =
+        0.85 * surfaceAlpha;
 
     vec3 compositeColor =
         mix(sceneColor, shadedColor, fluidOpacity);
