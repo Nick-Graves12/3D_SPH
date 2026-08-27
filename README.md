@@ -6,6 +6,10 @@ Particles are emitted from a circular pipe opening into a container. Their motio
 
 This is an educational 3D SPH demonstration, not a validated engineering pipe-flow or CFD solver.
 
+## Demo
+
+![3D SPH Fluid Simulation](Screenshots/demo.gif)
+
 ## Features
 
 - Circular disk particle emitter
