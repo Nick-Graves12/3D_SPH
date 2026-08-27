@@ -356,6 +356,9 @@ int main ()
                 float maximumQ = minimumQ;
                 double sumQ = 0.0;
 
+                float minimumPressure = state.particles.front().pressure;
+                float maximumPressure = minimumPressure;
+
                 for (const FluidParticle& particle : state.particles)
                 {
                     float q = particle.density / config.restDensity;
@@ -363,6 +366,12 @@ int main ()
                     minimumQ = std::min(minimumQ, q);
                     maximumQ = std::max(maximumQ, q);
                     sumQ += q;
+
+                    minimumPressure =
+                        std::min(minimumPressure, particle.pressure);
+
+                    maximumPressure =
+                        std::max(maximumPressure, particle.pressure);
                 }
 
                 double averageQ =
@@ -372,6 +381,10 @@ int main ()
                     << "density ratio: min=" << minimumQ
                     << ", average=" << averageQ
                     << ", max=" << maximumQ
+                    << '\n';
+                std::cout
+                    << "pressure range: min=" << minimumPressure
+                    << ", max=" << maximumPressure
                     << '\n';
             }
         }

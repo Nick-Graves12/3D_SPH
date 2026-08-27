@@ -31,6 +31,7 @@ void drawParticles(
     float particleRadius,
     float restDensity,
     bool showDensityColors,
+    bool showPressureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms);

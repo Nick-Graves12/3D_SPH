@@ -51,7 +51,7 @@ Color densityToColor(float density, float restDensity)
 
     if (q < 1.0f)
     {
-        float t = std::clamp((q - 0.5f) / 0.5f, 0.0f, 1.0f);
+        float t = std::clamp((q - 0.8f) / 0.2f, 0.0f, 1.0f);
 
         unsigned char red =
             static_cast<unsigned char>(0);
@@ -65,7 +65,7 @@ Color densityToColor(float density, float restDensity)
         return Color{red, green, blue, 255};
     }
 
-    float t = std::clamp((q - 1.0f) / 0.5f, 0.0f, 1.0f);
+    float t = std::clamp((q - 1.0f) / 0.25f, 0.0f, 1.0f);
    
     unsigned char red =
     static_cast<unsigned char>(255.0f * t);
@@ -76,6 +76,35 @@ Color densityToColor(float density, float restDensity)
         static_cast<unsigned char>(255.0f * (1.0f - t));
     
     return Color{red, green, blue, 255};
+}
+
+Color pressureToColor(float pressure, float pressureScale)
+{
+    float q = std::clamp(
+        pressure / pressureScale,
+        -1.0f,
+        1.0f);
+
+    if (q < 0.0f)
+    {
+        float t = -q;
+
+        return Color{
+            0,
+            static_cast<unsigned char>(200.0f * (1.0f - t)),
+            255,
+            255
+        };
+    }
+
+    float t = q;
+
+    return Color{
+        static_cast<unsigned char>(255.0f * t),
+        0,
+        static_cast<unsigned char>(255.0f * (1.0f - t)),
+        255
+    };
 }
 
 void renderScene(
@@ -99,6 +128,8 @@ void renderScene(
     const Shader& fluidSurfaceShader,
     int sceneTextureLocation)
 {
+    bool showDebugColors =
+        showDensityColors || showPressureColors;
     BeginTextureMode(fluidTarget);
     ClearBackground(Color{255, 255, 255, 0});
     BeginMode3D(camera);
@@ -107,6 +138,7 @@ void renderScene(
         particles,
         particleRadius,
         restDensity,
+        false,
         false,
         particleModel,
         fluidDepthMaterial,
@@ -155,64 +187,66 @@ void renderScene(
         texelDirectionLocation,
         verticalDirection,
         SHADER_UNIFORM_VEC2);
+    if (!showDebugColors)
+    {
+        BeginTextureMode(fluidTarget);
+        ClearBackground(Color{255, 255, 255, 0});
+        BeginShaderMode(fluidBlurShader);
 
-    BeginTextureMode(fluidTarget);
-    ClearBackground(Color{255, 255, 255, 0});
-    BeginShaderMode(fluidBlurShader);
+        Rectangle blurSource{
+            0.0f,
+            0.0f,
+            static_cast<float>(blurTarget.texture.width),
+            -static_cast<float>(blurTarget.texture.height)
+        };
 
-    Rectangle blurSource{
-        0.0f,
-        0.0f,
-        static_cast<float>(blurTarget.texture.width),
-        -static_cast<float>(blurTarget.texture.height)
-    };
+        DrawTextureRec(
+            blurTarget.texture,
+            blurSource,
+            Vector2{0.0f, 0.0f},
+            WHITE);
 
-    DrawTextureRec(
-        blurTarget.texture,
-        blurSource,
-        Vector2{0.0f, 0.0f},
-        WHITE);
+        EndShaderMode();
+        EndTextureMode();
+        
+        SetShaderValue(
+            fluidBlurShader,
+            texelDirectionLocation,
+            horizontalDirection,
+            SHADER_UNIFORM_VEC2);
 
-    EndShaderMode();
-    EndTextureMode();
-    
-    SetShaderValue(
-        fluidBlurShader,
-        texelDirectionLocation,
-        horizontalDirection,
-        SHADER_UNIFORM_VEC2);
+        BeginTextureMode(blurTarget);
+        ClearBackground(Color{255, 255, 255, 0});
+        BeginShaderMode(fluidBlurShader);
 
-    BeginTextureMode(blurTarget);
-    ClearBackground(Color{255, 255, 255, 0});
-    BeginShaderMode(fluidBlurShader);
+        DrawTextureRec(
+            fluidTarget.texture,
+            depthSource,
+            Vector2{0.0f, 0.0f},
+            WHITE);
 
-    DrawTextureRec(
-        fluidTarget.texture,
-        depthSource,
-        Vector2{0.0f, 0.0f},
-        WHITE);
+        EndShaderMode();
+        EndTextureMode();
 
-    EndShaderMode();
-    EndTextureMode();
+        SetShaderValue(
+            fluidBlurShader,
+            texelDirectionLocation,
+            verticalDirection,
+            SHADER_UNIFORM_VEC2);
 
-    SetShaderValue(
-        fluidBlurShader,
-        texelDirectionLocation,
-        verticalDirection,
-        SHADER_UNIFORM_VEC2);
+        BeginTextureMode(fluidTarget);
+        ClearBackground(Color{255, 255, 255, 0});
+        BeginShaderMode(fluidBlurShader);
 
-    BeginTextureMode(fluidTarget);
-    ClearBackground(Color{255, 255, 255, 0});
-    BeginShaderMode(fluidBlurShader);
+        DrawTextureRec(
+            blurTarget.texture,
+            blurSource,
+            Vector2{0.0f, 0.0f},
+            WHITE);
 
-    DrawTextureRec(
-        blurTarget.texture,
-        blurSource,
-        Vector2{0.0f, 0.0f},
-        WHITE);
-
-    EndShaderMode();
-    EndTextureMode();
+        EndShaderMode();
+        EndTextureMode();
+    }
 
     BeginTextureMode(sceneTarget);
     ClearBackground(RAYWHITE);
@@ -241,6 +275,19 @@ void renderScene(
             90.0f,
             RED);
 
+    if (showDebugColors)
+    {
+        drawParticles(
+            particles,
+            particleRadius,
+            restDensity,
+            showDensityColors,
+            showPressureColors,
+            particleModel,
+            instancedParticleMaterial,
+            particleTransforms);
+    }
+
     EndMode3D();
     EndTextureMode();
 
@@ -268,18 +315,23 @@ void renderScene(
         -static_cast<float>(fluidTarget.texture.height)
     };
 
-    SetShaderValueTexture(
-        fluidSurfaceShader,
-        sceneTextureLocation,
-        sceneTarget.texture);
+   if (!showDebugColors)
+    {
+        SetShaderValueTexture(
+            fluidSurfaceShader,
+            sceneTextureLocation,
+            sceneTarget.texture);
 
-    BeginShaderMode(fluidSurfaceShader);
+        BeginShaderMode(fluidSurfaceShader);
 
-    DrawTextureRec(
-        fluidTarget.texture,
-        source,
-        Vector2{0.0f, 0.0f},
-        WHITE);
+        DrawTextureRec(
+            fluidTarget.texture,
+            source,
+            Vector2{0.0f, 0.0f},
+            WHITE);
+
+        EndShaderMode();
+    }
     
     EndShaderMode();
 
@@ -291,6 +343,7 @@ void drawParticles(
     float particleRadius,
     float restDensity,
     bool showDensityColors,
+    bool showPressureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms)
@@ -312,24 +365,30 @@ void drawParticles(
 
         particleTransforms.push_back(transform);
     }
-    if (showDensityColors)
+    if (showDensityColors || showPressureColors)
     {
         for (const auto& particle : particles)
         {
-            Color particleColor =
-                densityToColor(
-                    particle.density,
-                    restDensity);
-            DrawModelEx(
-                particleModel,
+            Color particleColor;
+
+            if (showDensityColors)
+            {
+                particleColor =
+                    densityToColor(
+                        particle.density,
+                        restDensity);
+            }
+            else
+            {
+                particleColor =
+                    pressureToColor(
+                        particle.pressure,
+                        300.0f);
+            }
+
+            DrawSphere(
                 toRaylib(particle.position),
-                Vector3{0.0f, 0.0f, 1.0f}, // rotation axis
-                0.0f,                       // no rotation
-                Vector3{
-                    renderRadius,
-                    renderRadius,
-                    renderRadius
-                },
+                renderRadius,
                 particleColor);
         }
     }
