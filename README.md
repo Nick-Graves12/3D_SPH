@@ -25,6 +25,7 @@ This is an educational 3D SPH demonstration, not a validated engineering pipe-fl
 - Screen-space fluid surface reconstruction
 - Density and pressure visualization modes
 - Physics and rendering performance diagnostics
+- OpenMP-parallel density and force evaluation
 
 ## Simulation Pipeline
 
@@ -93,11 +94,12 @@ Density and pressure color modes are also available for debugging the simulation
 - A C++17-compatible compiler
 - raylib
 - `pkg-config`
+- OpenMP runtime (`libomp` on macOS)
 
 On macOS with Homebrew:
 
 ```bash
-brew install raylib pkg-config
+brew install raylib pkg-config libomp
 ```
 
 ## Build
@@ -109,17 +111,21 @@ git clone https://github.com/Nick-Graves12/3D_SPH.git
 cd 3D_SPH
 ```
 
+The neighbor search in the density and force passes is parallelized with OpenMP. On macOS, Apple's clang requires the `libomp` runtime and does not link it automatically, so the flags below are needed.
+
 Debug build:
 
 ```bash
-g++ -std=c++17 -Wall -Wextra -pedantic *.cpp -o main $(pkg-config --cflags --libs raylib)
+g++ -std=c++17 -Wall -Wextra -pedantic -Xpreprocessor -fopenmp -L$(brew --prefix libomp)/lib -lomp *.cpp -o main $(pkg-config --cflags --libs raylib)
 ```
 
 Optimized build:
 
 ```bash
-g++ -std=c++17 -O3 -DNDEBUG *.cpp -o main $(pkg-config --cflags --libs raylib)
+g++ -std=c++17 -O3 -DNDEBUG -Xpreprocessor -fopenmp -L$(brew --prefix libomp)/lib -lomp *.cpp -o main $(pkg-config --cflags --libs raylib)
 ```
+
+On Linux with GCC, the OpenMP flags simplify to just `-fopenmp`.
 
 Run the program from the project directory so its shader files can be found:
 
@@ -169,7 +175,6 @@ In particular:
 - Surface tension
 - Interactive parameter controls
 - Additional emitters and obstacles
-- Parallel CPU force evaluation
 - GPU simulation
 - More advanced fluid shading, reflections, and refraction
 

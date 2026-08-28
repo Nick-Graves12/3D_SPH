@@ -162,11 +162,17 @@ void computeDensity(
             smoothingRadiusSquared,
             coefficient);
 
-    for (FluidParticle& particle : particles)
+
+    #pragma omp parallel for
+    for (std::size_t particleIndex = 0;
+        particleIndex < particles.size();
+        particleIndex++)
     {
-        particle.density = selfDensity;
+
+        particles[particleIndex].density = selfDensity;
     }
             
+    #pragma omp parallel for
     for (std::size_t particleIndex = 0;
         particleIndex < particles.size();
         particleIndex++)
@@ -207,11 +213,13 @@ void computeDensity(
                     
                     for (std::size_t neighborIndex : bucket)
                     {
-                        if (neighborIndex <= particleIndex)
+
+                        if (neighborIndex == particleIndex)
                         {
                             continue;
                         }
-                        FluidParticle& neighbor =
+
+                        const FluidParticle& neighbor =
                             particles[neighborIndex];
 
                         Vec3 displacement =
@@ -232,7 +240,7 @@ void computeDensity(
                                 coefficient);
 
                         particle.density += contribution;
-                        neighbor.density += contribution;
+
                     }
                 }
             }
@@ -269,8 +277,17 @@ void addInternalAccelerations(
     const float cachedViscosityCoefficient =
         viscosityCoefficient(smoothingRadius);
 
-    for (FluidParticle& particle : particles)
+
+    // Parallel force accumulation. Each iteration writes only to its own
+    // particle's acceleration (neighbors are read-only), so this loop is
+    // race-free under OpenMP as written.
+    #pragma omp parallel for
+    for (std::size_t particleIndex = 0;
+        particleIndex < particles.size();
+        particleIndex++)
     {
+        FluidParticle& particle = particles[particleIndex];
+
         GridCoord centerCell =
             worldToCell(
                 particle.position,
