@@ -27,3 +27,9 @@ ConservationQuantities computeConservationQuantities(
         const std::vector<FluidParticle>& particles,
         float particleMass,
         float gravityMagnitude);
+
+HydrostaticCheck computeHydrostaticCheck(
+        const std::vector<FluidParticle>& particles,
+        float restDensity,
+        float stiffness,
+        float gravityMagnitude);

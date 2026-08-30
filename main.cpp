@@ -457,8 +457,26 @@ int main ()
                 << ", PE=" << quantities.potentialEnergy
                 << ", E=" << (quantities.kineticEnergy + quantities.potentialEnergy)
                 << '\n';
+
+            // Hydrostatic check: at rest, ratio ~1.0 means the settled fluid
+            // is consistent with its own EOS. Ignore it during filling -- h
+            // is dominated by the jet, not the pool. With default parameters
+            // a settled ratio around 1.5 is the expected clamped-EOS pressure
+            // bias (see README "Hydrostatic Check"), not a bug.
+            HydrostaticCheck hydrostatic =
+                computeHydrostaticCheck(
+                    state.particles,
+                    config.restDensity,
+                    config.stiffness,
+                    length(gravity));
+
+            std::cout
+                << "hydrostatic: h=" << hydrostatic.fluidHeight
+                << ", predicted=" << hydrostatic.predictedBottomPressure
+                << ", measured=" << hydrostatic.measuredBottomPressure
+                << ", ratio=" << hydrostatic.ratio
+                << '\n';
         }
-      
     }
     UnloadRenderTexture(fluidTarget);
 

@@ -25,7 +25,7 @@ This is an educational 3D SPH demonstration, not a validated engineering pipe-fl
 - Screen-space fluid surface reconstruction
 - Density and pressure visualization modes
 - Physics, rendering, and conservation diagnostics
-- Per-second report of performance, density/pressure ranges, and conserved quantities (mass, momentum, kinetic and potential energy)
+- Per-second report of performance, density/pressure ranges, conserved quantities (mass, momentum, kinetic and potential energy), and a hydrostatic pressure check
 - OpenMP-parallel density and force evaluation
 
 ## Controls
@@ -168,6 +168,29 @@ In particular:
 - The average density ratio should remain reasonably close to `1.0`.
 - The conservation report (printed once per second) should show mass and momentum held steady, with total energy decaying or flat once emission stops.
 - Rendering radius changes appearance but should not be treated as a substitute for correcting the physics.
+
+## Hydrostatic Check
+
+The per-second diagnostic ends with a hydrostatic check:
+
+```text
+hydrostatic: h=2.59, predicted=406.6, measured=605.3, ratio=1.49
+```
+
+- `h` — column height, the 99th percentile of particle heights (robust to a few splashing drops).
+- `predicted` — bottom pressure a uniform column of height `h` should exert under this EOS, from `dp/dz = -rho*g` with `rho = rho0 + p/k`: `p_bottom = k*rho0*(exp(g*h/k) - 1)`.
+- `measured` — mean pressure of the bottom 10% of the column.
+- `ratio` — measured / predicted.
+
+**How to read it:**
+
+- Ignore it during filling — `h` is dominated by the incoming jet, not the pool.
+- Once emission stops and the surface settles, `ratio` near `1.0` means the fluid is hydrostatic against its own equation of state.
+- With the default settings (`k = 200`, `restDensity = 15`) the settled ratio parks around `1.5` (measured ≈ 600 vs predicted ≈ 400). This is the expected bias of the clamped EOS `p = k*max(rho - rho0, 0)`: under-dense fluctuations are clamped to zero pressure, so mean density and pressure at depth run high. The bottom lands ~20% above rest density instead of the theoretical ~12% for this column height.
+- The elevated average density ratio at rest (~1.09) is mostly the hydrostatic compression of the column — the exact mean for this EOS is `(k/(g*h))*(exp(g*h/k) - 1)` ≈ 1.06 — plus a small clamping bias.
+- Raising `restDensity` does not fix it (verified: 15 → 16.3 left the average density ratio and bottom compression essentially unchanged). The bias is a property of the formulation, not a rest-density calibration error.
+
+Use `ratio` qualitatively: it should drop toward 1.0 as the fluid settles, and a steady ~1.5 at rest is the expected noise floor for this SPH formulation. Production solvers typically add δ-SPH density diffusion to remove it.
 
 ## Current Limitations
 

@@ -67,3 +67,11 @@ struct ConservationQuantities
     float kineticEnergy = 0.0f;
     float potentialEnergy = 0.0f;
 };
+
+struct HydrostaticCheck
+{
+    float fluidHeight = 0.0f;
+    float predictedBottomPressure = 0.0f;
+    float measuredBottomPressure = 0.0f;
+    float ratio = 0.0f;
+};

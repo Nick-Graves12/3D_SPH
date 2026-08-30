@@ -587,3 +587,71 @@ ConservationQuantities computeConservationQuantities(
     }
     return conservationQuantities;
 }
+
+HydrostaticCheck computeHydrostaticCheck(
+    const std::vector<FluidParticle>& particles,
+    float restDensity,
+    float stiffness,
+    float gravityMagnitude)
+{
+    HydrostaticCheck check;
+
+    if (particles.empty())
+    {
+        return check;
+    }
+
+    // Fluid column height: 99th percentile of particle height,
+    // robust against splashing outliers (tank floor is at z = 0).
+    std::vector<float> heights;
+    heights.reserve(particles.size());
+    for (const FluidParticle& particle : particles)
+    {
+        heights.push_back(particle.position.z);
+    }
+    std::size_t percentileIndex =
+        static_cast<std::size_t>((heights.size() - 1) * 0.99);
+    std::nth_element(
+        heights.begin(),
+        heights.begin() + percentileIndex,
+        heights.end());
+    check.fluidHeight = heights[percentileIndex];
+
+    // EOS-consistent hydrostatic bottom pressure, from
+    //   dp/dz = -rho * g,  rho = rho0 + p / k
+    //   =>  p_bottom = k * rho0 * (exp(g * h / k) - 1)
+    //
+    // Interpretation: at rest, ratio (measured/predicted) near 1.0 means the
+    // fluid matches its own EOS. With the default k = 200 the settled ratio
+    // parks around 1.5 -- the expected positive pressure bias of the clamped
+    // EOS (p = k*max(rho - rho0, 0)), which suppresses under-dense
+    // fluctuations. It is not a rest-density calibration error (verified: 15
+    // -> 16.3 left the average density ratio unchanged).
+    check.predictedBottomPressure =
+        stiffness * restDensity *
+        (std::exp(gravityMagnitude * check.fluidHeight / stiffness) - 1.0f);
+
+    // Measured: mean pressure of the bottom 10% of the column
+    // (more robust than the single most-compressed particle).
+    float bottomThreshold = 0.10f * check.fluidHeight;
+    double pressureSum = 0.0;
+    std::size_t sampleCount = 0;
+    for (const FluidParticle& particle : particles)
+    {
+        if (particle.position.z < bottomThreshold)
+        {
+            pressureSum += particle.pressure;
+            sampleCount++;
+        }
+    }
+
+    if (sampleCount > 0 && check.predictedBottomPressure > 0.0f)
+    {
+        check.measuredBottomPressure =
+            static_cast<float>(pressureSum / static_cast<double>(sampleCount));
+        check.ratio =
+            check.measuredBottomPressure / check.predictedBottomPressure;
+    }
+
+    return check;
+}
