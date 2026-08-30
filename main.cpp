@@ -442,6 +442,21 @@ int main ()
                     << ", max=" << maximumPressure
                     << '\n';
             }
+            ConservationQuantities quantities =
+                computeConservationQuantities(
+                    state.particles,
+                    config.particleMass,
+                    length(gravity));
+
+            std::cout
+                << "conservation: mass=" << quantities.mass
+                << ", momentum=(" << quantities.momentum.x
+                << ", " << quantities.momentum.y
+                << ", " << quantities.momentum.z << ")"
+                << ", KE=" << quantities.kineticEnergy
+                << ", PE=" << quantities.potentialEnergy
+                << ", E=" << (quantities.kineticEnergy + quantities.potentialEnergy)
+                << '\n';
         }
       
     }

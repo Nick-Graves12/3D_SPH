@@ -24,8 +24,15 @@ This is an educational 3D SPH demonstration, not a validated engineering pipe-fl
 - Instanced particle rendering
 - Screen-space fluid surface reconstruction
 - Density and pressure visualization modes
-- Physics and rendering performance diagnostics
+- Physics, rendering, and conservation diagnostics
+- Per-second report of performance, density/pressure ranges, and conserved quantities (mass, momentum, kinetic and potential energy)
 - OpenMP-parallel density and force evaluation
+
+## Controls
+
+- `D` — toggle density visualization (particles colored by density ratio)
+- `P` — toggle pressure visualization (particles colored by pressure)
+- Left / Right arrow — orbit the camera around the tank
 
 ## Simulation Pipeline
 
@@ -137,12 +144,14 @@ Run the program from the project directory so its shader files can be found:
 
 ```text
 main.cpp                 Application setup and main loop
-FluidSimulation.h/.cpp   Particle emission and SPH physics
+SimulationTypes.h        Shared data structures (particles, emitter, config, state)
+FluidSimulation.h/.cpp   Particle emission, SPH physics, and conservation checks
 SPHKernels.h/.cpp        Three-dimensional SPH kernels
+SpatialGrid.h/.cpp       Uniform spatial grid and neighbor queries
 Rendering.h/.cpp         Particle and screen-space fluid rendering
-Vec3.h                    Custom 3D vector type
-StartupTests.cpp          Mathematical and simulation checks
-*.vs / *.fs               Vertex and fragment shaders
+Vec3.h/.cpp              Custom 3D vector type
+StartupTests.h/.cpp      Mathematical and simulation checks
+*.vs / *.fs              Vertex and fragment shaders
 ```
 
 ## Numerical Stability
@@ -157,6 +166,7 @@ In particular:
 - Too little viscosity allows noisy relative motion.
 - Too much viscosity suppresses visible fluid motion.
 - The average density ratio should remain reasonably close to `1.0`.
+- The conservation report (printed once per second) should show mass and momentum held steady, with total energy decaying or flat once emission stops.
 - Rendering radius changes appearance but should not be treated as a substitute for correcting the physics.
 
 ## Current Limitations

@@ -22,3 +22,8 @@ void simulateStep(
     const Vec3& gravity,
     const SimulationConfig& config,
     PhysicsTimings& timings);
+
+ConservationQuantities computeConservationQuantities(
+        const std::vector<FluidParticle>& particles,
+        float particleMass,
+        float gravityMagnitude);

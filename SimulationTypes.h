@@ -59,3 +59,11 @@ struct SimulationState
     std::vector<FluidParticle> particles;
     UniformGrid grid;
 };
+
+struct ConservationQuantities
+{
+    float mass = 0.0f;
+    Vec3 momentum{0.0f, 0.0f, 0.0f};
+    float kineticEnergy = 0.0f;
+    float potentialEnergy = 0.0f;
+};

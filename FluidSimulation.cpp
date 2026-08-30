@@ -65,6 +65,8 @@ void updateEmitter(
     }
 }
 
+//Replaces the material derivative
+//Advance v, then x, advection handled implicitly
 void integrateParticles(
     std::vector<FluidParticle>& particles,
     float deltaTime)
@@ -149,20 +151,23 @@ void computeDensity(
     const BoundingBox& bounds,
     float smoothingRadius,
     float particleMass)
-{
+{   
+    //h^2 = 0.64
     const float smoothingRadiusSquared =
         smoothingRadius * smoothingRadius;
 
+    //Coefficient = 315.0f / (64.0f * kPi * h9 ~ 11.6727
     const float coefficient =
         poly6Coefficient(smoothingRadius);
 
+    //Self Density = m * W(0) = 1.0 * c * h6 ~ 3.06
     const float selfDensity =
         particleMass * poly6Kernel(
             0.0f,
             smoothingRadiusSquared,
             coefficient);
 
-
+    //Every particle starts at its own self density
     #pragma omp parallel for
     for (std::size_t particleIndex = 0;
         particleIndex < particles.size();
@@ -201,6 +206,7 @@ void computeDensity(
                         centerCell.z + offsetZ
                     };
 
+                    //Skip cells near tank wall or out of bounds
                     if (!isValidCell(neighborCell, grid))
                     {
                         continue;
@@ -213,7 +219,7 @@ void computeDensity(
                     
                     for (std::size_t neighborIndex : bucket)
                     {
-
+                        //Dont contribute particles own density
                         if (neighborIndex == particleIndex)
                         {
                             continue;
@@ -227,12 +233,15 @@ void computeDensity(
 
                         float distanceSquared =
                             squaredMagnitude(displacement);
-
+                        
+                        //Outside Kernel --> No Contribution
                         if (distanceSquared >=
                             smoothingRadiusSquared)
                         {
                             continue;
                         }
+
+                        //Contribution = m * W
                         float contribution =
                             particleMass * poly6Kernel(
                                 distanceSquared,
@@ -248,6 +257,7 @@ void computeDensity(
     }
 }
 
+//replaces the pressure Poisson Equation
 void computePressure(
     std::vector<FluidParticle>& particles,
     float restDensity,
@@ -255,11 +265,16 @@ void computePressure(
 {
     for (FluidParticle& particle : particles)
     {
+        //density - restDensity: how compressed is this particle?
+        //density > restDensity - compressed --> positive --> pushes neighbors away
+        //density < restDensity - under dense --> negative --> would pull neighbors towards itself
+        //std::max(..., 0.0f) - clamps negative case to zero
         particle.pressure = 
             stiffness * std::max(particle.density - restDensity, 0.0f);
     }
 }
 
+//viscous diffusion
 void addInternalAccelerations(
     std::vector<FluidParticle>& particles,
     const UniformGrid& grid,
@@ -278,9 +293,7 @@ void addInternalAccelerations(
         viscosityCoefficient(smoothingRadius);
 
 
-    // Parallel force accumulation. Each iteration writes only to its own
-    // particle's acceleration (neighbors are read-only), so this loop is
-    // race-free under OpenMP as written.
+    
     #pragma omp parallel for
     for (std::size_t particleIndex = 0;
         particleIndex < particles.size();
@@ -348,6 +361,10 @@ void addInternalAccelerations(
                             distance,
                             smoothingRadius,
                             cachedSpikyCoefficient);
+
+                        //Supplies a distant dependent weight
+                        //r=0 weight is max
+                        //r=h wieght is 0
                         float laplacian = viscosityLaplacian(distance,
                             smoothingRadius,
                             cachedViscosityCoefficient);
@@ -364,7 +381,8 @@ void addInternalAccelerations(
 
                         particle.acceleration =
                             add(particle.acceleration, pressureContribution);
-
+                        
+                        //Calculate direction of force
                         Vec3 velocityDifference = subtract(neighbor.velocity, particle.velocity);
 
                         float viscosityWeight =
@@ -546,4 +564,26 @@ SimulationConfig createDefaultConfig(const Emitter& emitter)
     config.layerInterval =
         (2.0f * config.particleRadius) / emitter.speed;
     return config;
+}
+
+ConservationQuantities computeConservationQuantities(
+    const std::vector<FluidParticle>& particles,
+    float particleMass,
+    float gravityMagnitude)
+{
+    ConservationQuantities conservationQuantities;
+    conservationQuantities.mass = particles.size() * particleMass;
+
+    for (const FluidParticle& particle : particles)
+    {
+        conservationQuantities.momentum = add(conservationQuantities.momentum,
+            multiply(particle.velocity, particleMass));
+
+        conservationQuantities.kineticEnergy += 
+            0.5f * particleMass * squaredMagnitude(particle.velocity);
+
+        conservationQuantities.potentialEnergy += 
+            particleMass * gravityMagnitude * particle.position.z;
+    }
+    return conservationQuantities;
 }

@@ -5,6 +5,7 @@
 
 constexpr float kPi = 3.14159265358979323846f;
 
+//W = c * q3
 float poly6Kernel(float distanceSquared, float smoothingRadiusSquared, float coefficient)
 {
     assert(distanceSquared >= 0);
