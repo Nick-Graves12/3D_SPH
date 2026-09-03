@@ -211,3 +211,32 @@ Use `ratio` qualitatively: it should drop toward 1.0 as the fluid settles, and a
 - GPU simulation
 - More advanced fluid shading, reflections, and refraction
 
+## Project Layout
+
+```
+3d SPH/
+├── Makefile              # build definition
+├── shaders/              # GLSL shaders (.vs / .fs)
+└── src/
+    ├── main.cpp          # window, camera, simulation loop, shader setup
+    ├── SimulationTypes.h # shared structs/config shared by all modules
+    ├── math/             # Vec3 vector math
+    ├── physics/          # FluidSimulation, SPHKernels, SpatialGrid, StartupTests
+    └── render/           # Rendering (screen-space fluid surface)
+```
+
+## Build & Run
+
+Requires [raylib](https://www.raylib.com/) (Homebrew: `brew install raylib`).
+
+```sh
+make        # build ./main
+make run    # build and run
+```
+
+Run `main` from the project root so the shaders in `shaders/` are found.
+
+The OpenMP pragmas in the density/force loops require an OpenMP runtime; Apple
+clang ignores them unless built with `-fopenmp` against `libomp` (e.g.
+`brew install libomp`).
+

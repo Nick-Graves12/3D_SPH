@@ -1,5 +1,5 @@
 #pragma once
-#include "Vec3.h"
+#include "../math/Vec3.h"
 
 float poly6Kernel(float distanceSquared, float smoothingRadius);
 float poly6Kernel(

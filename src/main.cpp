@@ -2,12 +2,12 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
-#include "Vec3.h"
+#include "math/Vec3.h"
 #include "SimulationTypes.h"
-#include "SpatialGrid.h"
-#include "FluidSimulation.h"
-#include "Rendering.h"
-#include "StartupTests.h"
+#include "physics/SpatialGrid.h"
+#include "physics/FluidSimulation.h"
+#include "render/Rendering.h"
+#include "physics/StartupTests.h"
 
 int main ()
 {
@@ -77,8 +77,8 @@ int main ()
         LoadRenderTexture(windowWidth, windowHeight);
 
     Shader lightingShader = LoadShader(
-        "lighting.vs",
-        "lighting.fs");
+        "shaders/lighting.vs",
+        "shaders/lighting.fs");
     
     int lightDirectionLocation =
         GetShaderLocation(lightingShader, "lightDirection");
@@ -96,8 +96,8 @@ int main ()
         SHADER_UNIFORM_VEC3);
     
     Shader instancedLightingShader = LoadShader(
-        "lighting_instanced.vs",
-        "lighting.fs");
+        "shaders/lighting_instanced.vs",
+        "shaders/lighting.fs");
     
     instancedLightingShader
     .locs[SHADER_LOC_MATRIX_MODEL] =
@@ -139,13 +139,13 @@ int main ()
     
     Shader fluidDepthShader = 
     LoadShader(
-        "fluid_depth_instanced.vs",
-        "fluid_depth.fs");
+        "shaders/fluid_depth_instanced.vs",
+        "shaders/fluid_depth.fs");
 
     Shader fluidThicknessShader =
     LoadShader(
-        "fluid_depth_instanced.vs",
-        "fluid_thickness.fs");
+        "shaders/fluid_depth_instanced.vs",
+        "shaders/fluid_thickness.fs");
 
     fluidThicknessShader.locs[SHADER_LOC_MATRIX_MODEL] =
         GetShaderLocationAttrib(
@@ -198,7 +198,7 @@ int main ()
         SHADER_UNIFORM_FLOAT);
 
     Shader fluidBlurShader =
-        LoadShader("fluid_blur.vs", "fluid_blur.fs");
+        LoadShader("shaders/fluid_blur.vs", "shaders/fluid_blur.fs");
 
     int texelDirectionLocation =
         GetShaderLocation(fluidBlurShader, "texelDirection");
@@ -215,7 +215,7 @@ int main ()
         SHADER_UNIFORM_FLOAT);
 
     Shader fluidSurfaceShader =
-        LoadShader("fluid_surface.vs", "fluid_surface.fs");
+        LoadShader("shaders/fluid_surface.vs", "shaders/fluid_surface.fs");
 
     int texelSizeLocation =
         GetShaderLocation(fluidSurfaceShader, "texelSize");

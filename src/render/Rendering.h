@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SimulationTypes.h"
+#include "../SimulationTypes.h"
 #include "raylib.h"
 
 void updateCameraControls(Camera3D& camera, float deltaTime);
