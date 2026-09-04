@@ -269,6 +269,10 @@ void computePressure(
         //density > restDensity - compressed --> positive --> pushes neighbors away
         //density < restDensity - under dense --> negative --> would pull neighbors towards itself
         //std::max(..., 0.0f) - clamps negative case to zero
+
+        //stiffness = k
+        //sound speed c = sqrt(k)
+        //Dictates how fast info travels and how water like the fluid is
         particle.pressure = 
             stiffness * std::max(particle.density - restDensity, 0.0f);
     }
@@ -281,7 +285,9 @@ void addInternalAccelerations(
     const BoundingBox& bounds,
     float smoothingRadius,
     float particleMass,
-    float viscosityStrength)
+    float viscosityStrength,
+    float referenceTemperature,
+    float viscosityTemperatureSensitivity)
 {
     const float smoothingRadiusSquared =
         smoothingRadius * smoothingRadius;
@@ -316,6 +322,15 @@ void addInternalAccelerations(
         const float particlePressureTerm =
             particle.pressure /
             (particle.density * particle.density);
+        
+        // Viscosity floor: hot fluid may thin toward 35% of baseline but
+        // never near-inviscid. Without it, buoyancy injects energy where
+        // damping was removed and the solver clumps/blows up.
+        const float localViscosity = std::max(
+            viscosityStrength *
+                std::exp(-viscosityTemperatureSensitivity *
+                    (particle.temperature - referenceTemperature)),
+            0.35f * viscosityStrength);
 
         for (int offsetZ = -1; offsetZ <= 1; offsetZ++)
         {
@@ -386,7 +401,7 @@ void addInternalAccelerations(
                         Vec3 velocityDifference = subtract(neighbor.velocity, particle.velocity);
 
                         float viscosityWeight =
-                            viscosityStrength
+                            localViscosity
                             * particleMass
                             / neighbor.density
                             * laplacian;
@@ -400,6 +415,163 @@ void addInternalAccelerations(
                 }
             }
         }
+    }
+}
+
+void diffuseHeat(
+    std::vector<FluidParticle>& particles,
+    const UniformGrid& grid,
+    const BoundingBox& bounds,
+    float smoothingRadius,
+    float particleMass,
+    float heatDiffusionCoefficient,
+    float deltaTime)
+{
+    const float smoothingRadiusSquared =
+        smoothingRadius * smoothingRadius;
+
+    const float cachedViscosityCoefficient =
+        viscosityCoefficient(smoothingRadius);
+
+    #pragma omp parallel for
+    for (std::size_t particleIndex = 0;
+        particleIndex < particles.size();
+        particleIndex++)
+    {
+        FluidParticle& particle = particles[particleIndex];
+
+        GridCoord centerCell =
+            worldToCell(
+                particle.position,
+                bounds,
+                grid.cellSize
+            );
+
+        if (!isValidCell(centerCell, grid))
+        {
+            continue;
+        }
+
+        float temperatureRate = 0.0f;
+
+        for (int offsetZ = -1; offsetZ <= 1; offsetZ++)
+        {
+            for (int offsetY = -1; offsetY <= 1; offsetY++)
+            {
+                for (int offsetX = -1; offsetX <= 1; offsetX++)
+                {
+                    GridCoord neighborCell{
+                        centerCell.x + offsetX,
+                        centerCell.y + offsetY,
+                        centerCell.z + offsetZ
+                    };
+
+                    if (!isValidCell(neighborCell, grid))
+                    {
+                        continue;
+                    }
+                    std::size_t bucketIndex =
+                        flattenCell(neighborCell, grid);
+
+                    const auto& bucket =
+                        grid.buckets[bucketIndex];
+
+                    for (std::size_t neighborIndex : bucket)
+                    {
+                        // My own contribution would be (T_i - T_i) = 0
+                        if (neighborIndex == particleIndex)
+                        {
+                            continue;
+                        }
+
+                        const FluidParticle& neighbor =
+                            particles[neighborIndex];
+
+                        Vec3 displacement =
+                            subtract(particle.position, neighbor.position);
+
+                        float distanceSquared =
+                            squaredMagnitude(displacement);
+
+                        if (distanceSquared >=
+                            smoothingRadiusSquared)
+                        {
+                            continue;
+                        }
+
+                        float distance = std::sqrt(distanceSquared);
+
+                        float laplacian = viscosityLaplacian(
+                            distance,
+                            smoothingRadius,
+                            cachedViscosityCoefficient);
+
+                        float neighborWeight =
+                            particleMass / neighbor.density;
+
+                        // (T_j - T_i): hotter neighbor heats me up,
+                        // colder neighbor cools me down
+                        temperatureRate +=
+                            neighborWeight * laplacian *
+                            (neighbor.temperature - particle.temperature);
+                    }
+                }
+            }
+        }
+
+        particle.temperature +=
+            deltaTime * heatDiffusionCoefficient * temperatureRate;
+    }
+}
+
+// Floor heater: a hot plate under the tank. Any particle within heaterHeight
+// of the floor exchanges heat toward heaterTemperature.
+//   dT = dt * rate * (T_heater - T)
+// Pure local source term -- no neighbor loop, no grid, no kernel.
+// This is what breaks energy conservation on purpose: heat enters the system.
+void applyFloorHeater(
+    std::vector<FluidParticle>& particles,
+    float floorHeight,
+    float heaterHeight,
+    float heaterTemperature,
+    float heaterTransferRate,
+    float deltaTime)
+{
+    for (FluidParticle& particle : particles)
+    {
+        if (particle.position.z >= floorHeight + heaterHeight)
+        {
+            continue;
+        }
+
+        float temperatureDifference =
+            heaterTemperature - particle.temperature;
+
+        particle.temperature +=
+            deltaTime * heaterTransferRate * temperatureDifference;
+    }
+}
+
+// Boussinesq buoyancy: hot fluid is less dense, so it gets an extra
+// upward acceleration proportional to (T - T0). gravity points down,
+// so multiplying by the NEGATIVE excess temperature lifts hot particles.
+void applyBuoyancy(
+    std::vector<FluidParticle>& particles,
+    const Vec3& gravity,
+    float referenceTemperature,
+    float thermalExpansionCoefficient)
+{
+    for (FluidParticle& particle : particles)
+    {
+        float excessTemperature =
+            particle.temperature - referenceTemperature;
+
+        Vec3 buoyancyAcceleration = multiply(
+            gravity,
+            -thermalExpansionCoefficient * excessTemperature);
+
+        particle.acceleration =
+            add(particle.acceleration, buoyancyAcceleration);
     }
 }
 
@@ -528,13 +700,42 @@ void simulateStep(
     #endif
     double internalForcesStart = GetTime();
     resetAccelerations(state.particles, gravity);
+    if (state.heatingEnabled)
+    {
+        // Thermal convection: the floor injects heat, diffusion spreads it,
+        // buoyancy drives hot fluid upward, and viscosity thins with heat.
+        applyBuoyancy(
+            state.particles,
+            gravity,
+            config.referenceTemperature,
+            config.thermalExpansionCoefficient);
+        applyFloorHeater(
+            state.particles,
+            bounds.min.z,
+            config.heaterHeight,
+            config.heaterTemperature,
+            config.heaterTransferRate,
+            config.fixedDeltaTime);
+        diffuseHeat(
+            state.particles,
+            state.grid,
+            bounds,
+            config.smoothingRadius,
+            config.particleMass,
+            config.heatDiffusionCoefficient,
+            config.fixedDeltaTime);
+    }
+    // Heating off runs the original cold solver: sensitivity 0 makes
+    // viscosity temperature-independent (leftover T is inert).
     addInternalAccelerations(
         state.particles,
         state.grid,
         bounds,
         config.smoothingRadius,
         config.particleMass,
-        config.viscosityStrength
+        config.viscosityStrength,
+        config.referenceTemperature,
+        state.heatingEnabled ? config.viscosityTemperatureSensitivity : 0.0f
     );
     timings.internalForcesMs += (GetTime() - internalForcesStart) * 1000.0;
     #ifndef NDEBUG
@@ -563,6 +764,18 @@ SimulationConfig createDefaultConfig(const Emitter& emitter)
     config.particlesPerLayer = 5;
     config.layerInterval =
         (2.0f * config.particleRadius) / emitter.speed;
+    config.referenceTemperature = 0.0f;
+    config.heatDiffusionCoefficient = 2.0f;
+    // Thermal convection tuning. Requires the viscosity floor in
+    // addInternalAccelerations: without it, buoyancy drives an almost
+    // inviscid boundary layer and the solver blows up (avg density climbed
+    // to 2.4, max to 19, hydrostatic ratio to 11). With the floor these
+    // settings hold the healthy envelope (avg ~1.04, max ~1.4, ratio ~1.5).
+    config.thermalExpansionCoefficient = 0.002f;
+    config.viscosityTemperatureSensitivity = 0.02f;
+    config.heaterHeight = 1.0f;
+    config.heaterTemperature = 100.0f;
+    config.heaterTransferRate = 1.0f;
     return config;
 }
 

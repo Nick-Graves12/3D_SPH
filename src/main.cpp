@@ -60,6 +60,7 @@ int main ()
 
     bool showDensityColors = false;
     bool showPressureColors = false;
+    bool showTemperatureColors = false;
 
     InitWindow(windowWidth, windowHeight, "SPH");
     SetTargetFPS(60);
@@ -304,6 +305,7 @@ int main ()
             if (showDensityColors)
             {
                 showPressureColors = false;
+                showTemperatureColors = false;
             }
         }
         if (IsKeyPressed(KEY_P))
@@ -313,7 +315,38 @@ int main ()
             if (showPressureColors)
             {
                 showDensityColors = false;
+                showTemperatureColors = false;
             }
+        }
+        if (IsKeyPressed(KEY_T))
+        {
+            showTemperatureColors = !showTemperatureColors;
+
+            if (showTemperatureColors)
+            {
+                showDensityColors = false;
+                showPressureColors = false;
+            }
+        }
+        if (IsKeyPressed(KEY_H))
+        {
+            state.heatingEnabled = !state.heatingEnabled;
+
+            // Turning heating off reverts to the original cold solver;
+            // clear any leftover heat field so colors and the temperature
+            // readout reflect the cold version honestly.
+            if (!state.heatingEnabled)
+            {
+                for (FluidParticle& particle : state.particles)
+                {
+                    particle.temperature = config.referenceTemperature;
+                }
+            }
+
+            std::cout
+                << "[heating "
+                << (state.heatingEnabled ? "ON" : "OFF")
+                << "]\n";
         }
         float frameTime = GetFrameTime();
         frameTime = std::min(frameTime, 0.1f);
@@ -367,6 +400,7 @@ int main ()
             config.restDensity,
             showDensityColors,
             showPressureColors,
+            showTemperatureColors,
             particleModel,
             instancedParticleMaterial,
             particleTransforms,
@@ -414,6 +448,11 @@ int main ()
                 float minimumPressure = state.particles.front().pressure;
                 float maximumPressure = minimumPressure;
 
+                float minimumTemperature =
+                    state.particles.front().temperature;
+                float maximumTemperature = minimumTemperature;
+                double sumTemperature = 0.0;
+
                 for (const FluidParticle& particle : state.particles)
                 {
                     float q = particle.density / config.restDensity;
@@ -427,10 +466,22 @@ int main ()
 
                     maximumPressure =
                         std::max(maximumPressure, particle.pressure);
+
+                    minimumTemperature =
+                        std::min(minimumTemperature, particle.temperature);
+
+                    maximumTemperature =
+                        std::max(maximumTemperature, particle.temperature);
+
+                    sumTemperature += particle.temperature;
                 }
 
                 double averageQ =
                     sumQ / static_cast<double>(state.particles.size());
+
+                double averageTemperature =
+                    sumTemperature /
+                    static_cast<double>(state.particles.size());
 
                 std::cout
                     << "density ratio: min=" << minimumQ
@@ -440,6 +491,11 @@ int main ()
                 std::cout
                     << "pressure range: min=" << minimumPressure
                     << ", max=" << maximumPressure
+                    << '\n';
+                std::cout
+                    << "temperature: min=" << minimumTemperature
+                    << ", average=" << averageTemperature
+                    << ", max=" << maximumTemperature
                     << '\n';
             }
             ConservationQuantities quantities =
@@ -475,7 +531,7 @@ int main ()
                 << ", predicted=" << hydrostatic.predictedBottomPressure
                 << ", measured=" << hydrostatic.measuredBottomPressure
                 << ", ratio=" << hydrostatic.ratio
-                << '\n';
+                << "\n\n";
         }
     }
     UnloadRenderTexture(fluidTarget);

@@ -14,6 +14,7 @@ void renderScene(
     float restDensity,
     bool showDensityColors,
     bool showPressureColors,
+    bool showTemperatureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms,
@@ -35,6 +36,7 @@ void drawParticles(
     float restDensity,
     bool showDensityColors,
     bool showPressureColors,
+    bool showTemperatureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms);

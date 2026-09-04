@@ -107,6 +107,41 @@ Color pressureToColor(float pressure, float pressureScale)
     };
 }
 
+// Absolute heat scale matching the physics defaults:
+// 0 = reference temperature, 100 = heater temperature.
+// Cold: deep blue -> white-hot -> red at the plate.
+Color temperatureToColor(float temperature,
+    float minimumTemperature,
+    float maximumTemperature)
+{
+    float t = std::clamp(
+        (temperature - minimumTemperature) /
+        (maximumTemperature - minimumTemperature),
+        0.0f,
+        1.0f);
+
+    unsigned char red, green, blue;
+
+    if (t < 0.5f)
+    {
+        // deep blue -> white
+        float s = t / 0.5f;
+        red   = static_cast<unsigned char>(40.0f + 215.0f * s);
+        green = static_cast<unsigned char>(90.0f + 165.0f * s);
+        blue  = 255;
+    }
+    else
+    {
+        // white -> red
+        float s = (t - 0.5f) / 0.5f;
+        red   = 255;
+        green = static_cast<unsigned char>(255.0f * (1.0f - s));
+        blue  = static_cast<unsigned char>(255.0f - 235.0f * s);
+    }
+
+    return Color{red, green, blue, 255};
+}
+
 void renderScene(
     const Camera3D& camera,
     const BoundingBox& tank,
@@ -116,6 +151,7 @@ void renderScene(
     float restDensity,
     bool showDensityColors,
     bool showPressureColors,
+    bool showTemperatureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms,
@@ -132,7 +168,7 @@ void renderScene(
     int thicknessTextureLocation)
 {
     bool showDebugColors =
-        showDensityColors || showPressureColors;
+        showDensityColors || showPressureColors || showTemperatureColors;
     BeginTextureMode(fluidTarget);
     ClearBackground(Color{255, 255, 255, 0});
     BeginMode3D(camera);
@@ -141,6 +177,7 @@ void renderScene(
         particles,
         particleRadius,
         restDensity,
+        false,
         false,
         false,
         particleModel,
@@ -161,6 +198,7 @@ void renderScene(
         particles,
         particleRadius,
         restDensity,
+        false,
         false,
         false,
         particleModel,
@@ -309,6 +347,7 @@ void renderScene(
             restDensity,
             showDensityColors,
             showPressureColors,
+            showTemperatureColors,
             particleModel,
             instancedParticleMaterial,
             particleTransforms);
@@ -373,6 +412,7 @@ void drawParticles(
     float restDensity,
     bool showDensityColors,
     bool showPressureColors,
+    bool showTemperatureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms)
@@ -394,7 +434,7 @@ void drawParticles(
 
         particleTransforms.push_back(transform);
     }
-    if (showDensityColors || showPressureColors)
+    if (showDensityColors || showPressureColors || showTemperatureColors)
     {
         for (const auto& particle : particles)
         {
@@ -407,12 +447,20 @@ void drawParticles(
                         particle.density,
                         restDensity);
             }
-            else
+            else if (showPressureColors)
             {
                 particleColor =
                     pressureToColor(
                         particle.pressure,
                         300.0f);
+            }
+            else
+            {
+                particleColor =
+                    temperatureToColor(
+                        particle.temperature,
+                        0.0f,     // referenceTemperature
+                        100.0f);  // heaterTemperature
             }
 
             DrawSphere(

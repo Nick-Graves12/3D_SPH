@@ -23,15 +23,18 @@ This is an educational 3D SPH demonstration, not a validated engineering pipe-fl
 - Configurable limit of approximately 5,000 particles
 - Instanced particle rendering
 - Screen-space fluid surface reconstruction
-- Density and pressure visualization modes
+- Density, pressure, and temperature visualization modes
+- Floor-heater convection: buoyancy, heat diffusion, and temperature-dependent viscosity, with an `H` toggle to run the original cold solver
 - Physics, rendering, and conservation diagnostics
-- Per-second report of performance, density/pressure ranges, conserved quantities (mass, momentum, kinetic and potential energy), and a hydrostatic pressure check
+- Per-second report of performance, density/pressure/temperature ranges, conserved quantities (mass, momentum, kinetic and potential energy), and a hydrostatic pressure check
 - OpenMP-parallel density and force evaluation
 
 ## Controls
 
 - `D` — toggle density visualization (particles colored by density ratio)
 - `P` — toggle pressure visualization (particles colored by pressure)
+- `T` — toggle temperature visualization (particles colored by temperature)
+- `H` — toggle heating (full thermal convection on/off; off runs the original cold solver)
 - Left / Right arrow — orbit the camera around the tank
 
 ## Simulation Pipeline
@@ -191,6 +194,22 @@ hydrostatic: h=2.59, predicted=406.6, measured=605.3, ratio=1.49
 - Raising `restDensity` does not fix it (verified: 15 → 16.3 left the average density ratio and bottom compression essentially unchanged). The bias is a property of the formulation, not a rest-density calibration error.
 
 Use `ratio` qualitatively: it should drop toward 1.0 as the fluid settles, and a steady ~1.5 at rest is the expected noise floor for this SPH formulation. Production solvers typically add δ-SPH density diffusion to remove it.
+
+## Thermal Convection
+
+Pressing `H` toggles heating. When heating is on, the tank floor acts as a hot plate: particles near the floor gain heat toward `heaterTemperature`, heat diffuses through the fluid, hot particles receive an upward buoyancy acceleration, and viscosity thins as temperature rises. Convection rolls the heated floor fluid up into rising plumes.
+
+When heating is off the solver reverts to the original cold SPH — no heater, no diffusion, no buoyancy, and viscosity is temperature-independent. Any leftover temperature field is cleared on toggle, so colors and readouts reflect the cold version honestly. Use `H` to A/B the two versions live.
+
+The per-second report prints a temperature line:
+
+```text
+temperature: min=0, average=18.4, max=100
+```
+
+`min`/`max` bracket the heat field; the heater relaxes boundary-layer particles toward `heaterTemperature` (100) and diffusion spreads that heat upward. A healthy convecting tank shows a hot floor, a warm bulk, and colder surface fluid.
+
+**Stability note:** the convective parameters require a viscosity floor in `addInternalAccelerations` — hot fluid may thin toward 35% of baseline but never near-inviscid. Without that floor, buoyancy injects energy exactly where damping was removed and the solver clumps (verified: average density ratio climbed to 2.4, max to 19, hydrostatic ratio to 11; with the floor the same settings hold avg ~1.04, max ~1.4, ratio ~1.5).
 
 ## Current Limitations
 

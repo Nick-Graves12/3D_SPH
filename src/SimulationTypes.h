@@ -27,6 +27,7 @@ struct FluidParticle
     Vec3 acceleration;
     float density = 0.0f;
     float pressure = 0.0f;
+    float temperature = 0.0f;
 };
 
 struct Emitter
@@ -36,6 +37,7 @@ struct Emitter
     float radius;
     float speed;
     float spawnAccumulator;
+    float temperature = 0.0f;
 };
 
 struct SimulationConfig
@@ -51,6 +53,13 @@ struct SimulationConfig
     float layerInterval;
     std::size_t maxParticleCount;
     std::size_t particlesPerLayer;
+    float referenceTemperature;
+    float heatDiffusionCoefficient;
+    float thermalExpansionCoefficient;
+    float viscosityTemperatureSensitivity;
+    float heaterHeight;
+    float heaterTemperature;
+    float heaterTransferRate;
 };
 
 struct SimulationState
@@ -58,6 +67,9 @@ struct SimulationState
     Emitter emitter;
     std::vector<FluidParticle> particles;
     UniformGrid grid;
+    // Runtime toggle (H key): off reverts to the original cold solver --
+    // no heater, no diffusion, no buoyancy, temperature-independent viscosity.
+    bool heatingEnabled = true;
 };
 
 struct ConservationQuantities
