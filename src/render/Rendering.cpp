@@ -28,20 +28,65 @@ void orbitCameraYaw(Camera3D& camera, float angleRadians)
     };
 }
 
-void updateCameraControls(Camera3D& camera, float deltaTime)
+void updateCameraControls(
+    Camera3D& camera,
+    float deltaTime,
+    int buttonOrbitDirection,
+    bool pointerOverPanel)
 {
     const float orbitSpeed = 60.0f;
     float orbitAmount =
         orbitSpeed * DEG2RAD * deltaTime;
 
-    if (IsKeyDown(KEY_RIGHT))
+    // HUD < / > buttons contribute +/-1; arrow keys add on top so both
+    // input paths work together.
+    int direction = buttonOrbitDirection;
+
+    if (IsKeyDown(KEY_RIGHT)) direction += 1;
+    if (IsKeyDown(KEY_LEFT)) direction -= 1;
+
+    if (direction != 0)
     {
-        orbitCameraYaw(camera, orbitAmount);
+        orbitCameraYaw(
+            camera,
+            orbitAmount * static_cast<float>(direction));
     }
 
-    if (IsKeyDown(KEY_LEFT))
+    // Left-drag orbits, unless the cursor is over a HUD widget.
+    if (IsMouseButtonDown(MOUSE_BUTTON_LEFT) && !pointerOverPanel)
     {
-        orbitCameraYaw(camera, -orbitAmount);
+        orbitCameraYaw(camera, -GetMouseDelta().x * 0.005f);
+    }
+
+    // Scroll wheel zooms in/out (ignored over the HUD panel).
+    float wheel = GetMouseWheelMove();
+    if (wheel != 0.0f && !pointerOverPanel)
+    {
+        Vector3 offset =
+            Vector3Subtract(camera.position, camera.target);
+
+        Vector3 newOffset =
+            Vector3Scale(offset, 1.0f - wheel * 0.08f);
+
+        float newDistance = Vector3Length(newOffset);
+        const float minDistance = 5.0f;
+        const float maxDistance = 35.0f;
+
+        if (newDistance < minDistance)
+        {
+            newOffset = Vector3Scale(
+                Vector3Normalize(offset),
+                minDistance);
+        }
+        else if (newDistance > maxDistance)
+        {
+            newOffset = Vector3Scale(
+                Vector3Normalize(offset),
+                maxDistance);
+        }
+
+        camera.position =
+            Vector3Add(camera.target, newOffset);
     }
 }
 
@@ -149,9 +194,6 @@ void renderScene(
     const std::vector<FluidParticle>& particles,
     float particleRadius,
     float restDensity,
-    bool showDensityColors,
-    bool showPressureColors,
-    bool showTemperatureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms,
@@ -165,10 +207,13 @@ void renderScene(
     int sceneTextureLocation,
     const RenderTexture2D& thicknessTarget,
     const Material& fluidThicknessMaterial,
-    int thicknessTextureLocation)
+    int thicknessTextureLocation,
+    const Hud& hud)
 {
     bool showDebugColors =
-        showDensityColors || showPressureColors || showTemperatureColors;
+        hud.controls.showDensityColors ||
+        hud.controls.showPressureColors ||
+        hud.controls.showTemperatureColors;
     BeginTextureMode(fluidTarget);
     ClearBackground(Color{255, 255, 255, 0});
     BeginMode3D(camera);
@@ -345,9 +390,9 @@ void renderScene(
             particles,
             particleRadius,
             restDensity,
-            showDensityColors,
-            showPressureColors,
-            showTemperatureColors,
+            hud.controls.showDensityColors,
+            hud.controls.showPressureColors,
+            hud.controls.showTemperatureColors,
             particleModel,
             instancedParticleMaterial,
             particleTransforms);
@@ -402,6 +447,8 @@ void renderScene(
 
         EndShaderMode();
     }
+
+    drawHud(hud);
 
     EndDrawing();
 }

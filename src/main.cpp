@@ -7,6 +7,7 @@
 #include "physics/SpatialGrid.h"
 #include "physics/FluidSimulation.h"
 #include "render/Rendering.h"
+#include "render/Hud.h"
 #include "physics/StartupTests.h"
 
 int main ()
@@ -58,9 +59,69 @@ int main ()
     const int maxSubstepsPerFrame = 4;
     float physicsAccumulator = 0.0f;
 
-    bool showDensityColors = false;
-    bool showPressureColors = false;
-    bool showTemperatureColors = false;
+    // Accumulated simulated time, reported by the HUD performance readings.
+    double simulationElapsed = 0.0;
+
+    Hud hudState{};
+
+    // Toggle helpers shared by the keyboard (D/P/T/H) and the HUD buttons so
+    // both input paths always agree with each other.
+    auto enableDensityColors = [&]()
+    {
+        hudState.controls.showDensityColors = true;
+        hudState.controls.showPressureColors = false;
+        hudState.controls.showTemperatureColors = false;
+    };
+
+    auto disableDensityColors = [&]()
+    {
+        hudState.controls.showDensityColors = false;
+    };
+
+    auto enablePressureColors = [&]()
+    {
+        hudState.controls.showPressureColors = true;
+        hudState.controls.showDensityColors = false;
+        hudState.controls.showTemperatureColors = false;
+    };
+
+    auto disablePressureColors = [&]()
+    {
+        hudState.controls.showPressureColors = false;
+    };
+
+    auto enableTemperatureColors = [&]()
+    {
+        hudState.controls.showTemperatureColors = true;
+        hudState.controls.showDensityColors = false;
+        hudState.controls.showPressureColors = false;
+    };
+
+    auto disableTemperatureColors = [&]()
+    {
+        hudState.controls.showTemperatureColors = false;
+    };
+
+    auto toggleHeating = [&]()
+    {
+        state.heatingEnabled = !state.heatingEnabled;
+        hudState.controls.heatingEnabled = state.heatingEnabled;
+
+        // Turning heating off reverts to the original cold solver; clear any
+        // leftover heat field so colors reflect the cold version honestly.
+        if (!state.heatingEnabled)
+        {
+            for (FluidParticle& particle : state.particles)
+            {
+                particle.temperature = config.referenceTemperature;
+            }
+        }
+
+        std::cout
+            << "[heating "
+            << (state.heatingEnabled ? "ON" : "OFF")
+            << "]\n";
+    };
 
     InitWindow(windowWidth, windowHeight, "SPH");
     SetTargetFPS(60);
@@ -298,62 +359,129 @@ int main ()
             
     while (!WindowShouldClose())
     {
+        // Keyboard toggles: D = density, P = pressure, T = temperature.
         if (IsKeyPressed(KEY_D))
         {
-            showDensityColors = !showDensityColors;
-
-            if (showDensityColors)
+            if (hudState.controls.showDensityColors)
             {
-                showPressureColors = false;
-                showTemperatureColors = false;
+                disableDensityColors();
+            }
+            else
+            {
+                enableDensityColors();
             }
         }
         if (IsKeyPressed(KEY_P))
         {
-            showPressureColors = !showPressureColors;
-
-            if (showPressureColors)
+            if (hudState.controls.showPressureColors)
             {
-                showDensityColors = false;
-                showTemperatureColors = false;
+                disablePressureColors();
+            }
+            else
+            {
+                enablePressureColors();
             }
         }
         if (IsKeyPressed(KEY_T))
         {
-            showTemperatureColors = !showTemperatureColors;
-
-            if (showTemperatureColors)
+            if (hudState.controls.showTemperatureColors)
             {
-                showDensityColors = false;
-                showPressureColors = false;
+                disableTemperatureColors();
+            }
+            else
+            {
+                enableTemperatureColors();
             }
         }
         if (IsKeyPressed(KEY_H))
         {
-            state.heatingEnabled = !state.heatingEnabled;
-
-            // Turning heating off reverts to the original cold solver;
-            // clear any leftover heat field so colors and the temperature
-            // readout reflect the cold version honestly.
-            if (!state.heatingEnabled)
-            {
-                for (FluidParticle& particle : state.particles)
-                {
-                    particle.temperature = config.referenceTemperature;
-                }
-            }
-
-            std::cout
-                << "[heating "
-                << (state.heatingEnabled ? "ON" : "OFF")
-                << "]\n";
+            toggleHeating();
         }
+
+        // HUD buttons drive the same toggles as the keyboard.
+        HudMouseInput hudMouse = readHudMouseInput(hudState);
+
+        if (hudMouse.densityPressed)
+        {
+            if (hudState.controls.showDensityColors)
+            {
+                disableDensityColors();
+            }
+            else
+            {
+                enableDensityColors();
+            }
+        }
+        if (hudMouse.pressurePressed)
+        {
+            if (hudState.controls.showPressureColors)
+            {
+                disablePressureColors();
+            }
+            else
+            {
+                enablePressureColors();
+            }
+        }
+        if (hudMouse.temperaturePressed)
+        {
+            if (hudState.controls.showTemperatureColors)
+            {
+                disableTemperatureColors();
+            }
+            else
+            {
+                enableTemperatureColors();
+            }
+        }
+        if (hudMouse.heatingPressed)
+        {
+            toggleHeating();
+        }
+
+        // Readings-group buttons toggle their numeric readouts. Unlike the
+        // display modes, several readings groups can be open at once.
+        if (hudMouse.particleReadingsPressed)
+        {
+            hudState.controls.showParticleReadings =
+                !hudState.controls.showParticleReadings;
+        }
+        if (hudMouse.densityReadingsPressed)
+        {
+            hudState.controls.showDensityReadings =
+                !hudState.controls.showDensityReadings;
+        }
+        if (hudMouse.pressureReadingsPressed)
+        {
+            hudState.controls.showPressureReadings =
+                !hudState.controls.showPressureReadings;
+        }
+        if (hudMouse.temperatureReadingsPressed)
+        {
+            hudState.controls.showTemperatureReadings =
+                !hudState.controls.showTemperatureReadings;
+        }
+        if (hudMouse.performanceReadingsPressed)
+        {
+            hudState.controls.showPerformanceReadings =
+                !hudState.controls.showPerformanceReadings;
+        }
+
+        // Held < / > buttons orbit the camera while the button is down.
+        int cameraButtonDirection = 0;
+        if (hudMouse.orbitLeftHeld) cameraButtonDirection -= 1;
+        if (hudMouse.orbitRightHeld) cameraButtonDirection += 1;
+
         float frameTime = GetFrameTime();
         frameTime = std::min(frameTime, 0.1f);
         physicsAccumulator += frameTime;
         diagnosticFrameCounter++;
 
-        updateCameraControls(camera, frameTime);
+        updateCameraControls(
+            camera,
+            frameTime,
+            cameraButtonDirection,
+            hudMouse.pointerOverPanel);
 
         float cameraPosition[3]{
             camera.position.x,
@@ -381,6 +509,9 @@ int main ()
             physicsAccumulator -= config.fixedDeltaTime;
             substepCount++;
         }
+        simulationElapsed +=
+            static_cast<double>(substepCount) * config.fixedDeltaTime;
+
         double physicsMilliseconds =
             (GetTime() - physicsStart) * 1000.0;
         if (substepCount == maxSubstepsPerFrame &&
@@ -398,9 +529,6 @@ int main ()
             state.particles,
             config.particleRadius,
             config.restDensity,
-            showDensityColors,
-            showPressureColors,
-            showTemperatureColors,
             particleModel,
             instancedParticleMaterial,
             particleTransforms,
@@ -414,10 +542,85 @@ int main ()
             sceneTextureLocation,
             thicknessTarget,
             fluidThicknessMaterial,
-            thicknessTextureLocation);
+            thicknessTextureLocation,
+            hudState);
 
         double renderingMilliseconds =
             (GetTime() - renderingStart) * 1000.0;
+
+        // Refresh the HUD readings every frame. The particle-field stats and
+        // physics time are current; the render time shown is the frame that
+        // was just composited (displayed from the next frame on).
+        hudState.stats.particleCount =
+            static_cast<int>(state.particles.size());
+        hudState.stats.fps = GetFPS();
+        hudState.stats.physicsMilliseconds =
+            static_cast<float>(physicsMilliseconds);
+        hudState.stats.renderingMilliseconds =
+            static_cast<float>(renderingMilliseconds);
+        hudState.stats.simulationSeconds =
+            static_cast<float>(simulationElapsed);
+
+        if (state.particles.empty())
+        {
+            hudState.stats.density = DensityReadings{};
+            hudState.stats.pressure = PressureReadings{};
+            hudState.stats.temperature = TemperatureReadings{};
+        }
+        else
+        {
+            const FluidParticle& first = state.particles.front();
+
+            float minimumQ = first.density / config.restDensity;
+            float maximumQ = minimumQ;
+            double sumQ = 0.0;
+
+            float minimumPressure = first.pressure;
+            float maximumPressure = minimumPressure;
+            double sumPressure = 0.0;
+
+            float minimumTemperature = first.temperature;
+            float maximumTemperature = minimumTemperature;
+            double sumTemperature = 0.0;
+
+            for (const FluidParticle& particle : state.particles)
+            {
+                float q = particle.density / config.restDensity;
+
+                minimumQ = std::min(minimumQ, q);
+                maximumQ = std::max(maximumQ, q);
+                sumQ += q;
+
+                minimumPressure =
+                    std::min(minimumPressure, particle.pressure);
+                maximumPressure =
+                    std::max(maximumPressure, particle.pressure);
+                sumPressure += particle.pressure;
+
+                minimumTemperature =
+                    std::min(minimumTemperature, particle.temperature);
+                maximumTemperature =
+                    std::max(maximumTemperature, particle.temperature);
+                sumTemperature += particle.temperature;
+            }
+
+            double count = static_cast<double>(state.particles.size());
+
+            hudState.stats.density.minRatio = minimumQ;
+            hudState.stats.density.avgRatio =
+                static_cast<float>(sumQ / count);
+            hudState.stats.density.maxRatio = maximumQ;
+
+            hudState.stats.pressure.minPressure = minimumPressure;
+            hudState.stats.pressure.avgPressure =
+                static_cast<float>(sumPressure / count);
+            hudState.stats.pressure.maxPressure = maximumPressure;
+
+            hudState.stats.temperature.minTemperature = minimumTemperature;
+            hudState.stats.temperature.avgTemperature =
+                static_cast<float>(sumTemperature / count);
+            hudState.stats.temperature.maxTemperature = maximumTemperature;
+        }
 
         if (diagnosticFrameCounter % 60 == 0)
         {

@@ -1,9 +1,14 @@
 #pragma once
 
 #include "../SimulationTypes.h"
+#include "Hud.h"
 #include "raylib.h"
 
-void updateCameraControls(Camera3D& camera, float deltaTime);
+void updateCameraControls(
+    Camera3D& camera,
+    float deltaTime,
+    int buttonOrbitDirection,
+    bool pointerOverPanel);
 
 void renderScene(
     const Camera3D& camera,
@@ -12,9 +17,6 @@ void renderScene(
     const std::vector<FluidParticle>& particles,
     float particleRadius,
     float restDensity,
-    bool showDensityColors,
-    bool showPressureColors,
-    bool showTemperatureColors,
     const Model& particleModel,
     const Material& instancedParticleMaterial,
     std::vector<Matrix>& particleTransforms,
@@ -28,7 +30,8 @@ void renderScene(
     int sceneTextureLocation,
     const RenderTexture2D& thicknessTarget,
     const Material& fluidThicknessMaterial,
-    int thicknessTextureLocation);
+    int thicknessTextureLocation,
+    const Hud& hud);
 
 void drawParticles(
     const std::vector<FluidParticle>& particles,

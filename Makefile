@@ -21,7 +21,8 @@ SRCS := \
     src/physics/SPHKernels.cpp \
     src/physics/SpatialGrid.cpp \
     src/physics/StartupTests.cpp \
-    src/render/Rendering.cpp
+    src/render/Rendering.cpp \
+    src/render/Hud.cpp
 
 main: $(SRCS) Makefile
 	$(CXX) $(CXXFLAGS) $(RAYLIB_CFLAGS) $(SRCS) -o $@ $(RAYLIB_LIBS)
