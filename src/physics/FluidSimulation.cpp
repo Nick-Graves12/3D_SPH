@@ -752,15 +752,15 @@ void simulateStep(
 SimulationConfig createDefaultConfig(const Emitter& emitter)
 {
     SimulationConfig config{};
-    config.smoothingRadius = 0.8f;
-    config.particleMass = 1.0f;
-    config.particleRadius = 0.2f;
+    config.smoothingRadius = 0.51f;
+    config.particleMass = 0.25f;
+    config.particleRadius = 0.128f;
     config.restDensity = 15.0f;
     config.stiffness = 200.0f;
     config.viscosityStrength = 0.1f;
     config.restitution = 0.05f;
     config.fixedDeltaTime = 1.0f / 120.0f;
-    config.maxParticleCount = 5000;
+    config.maxParticleCount = 20000;
     config.particlesPerLayer = 5;
     config.layerInterval =
         (2.0f * config.particleRadius) / emitter.speed;
